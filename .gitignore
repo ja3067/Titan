@@ -1,6 +1,8 @@
 # Prerequisites
+.vscode
 *.d
 .vs
+.vscode
 
 # CMake Files
 cmake-build-debug
