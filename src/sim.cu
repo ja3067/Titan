@@ -18,6 +18,9 @@
 #include <cuda_device_runtime_api.h>
 #include <cuda_gl_interop.h>
 #include <exception>
+#include <device_launch_parameters.h>
+
+
 
 #ifdef GRAPHICS
 #ifndef SDL2
