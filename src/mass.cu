@@ -7,7 +7,6 @@
 Mass::Mass() {
     m = 1.0;
     dt = 0.0001;
-    damping = 1.0;
     T = 0;
     valid = true;
     arrayptr = nullptr;
@@ -22,7 +21,6 @@ void Mass::operator=(CUDA_MASS & mass) {
     m = mass.m;
     dt = mass.dt;
     T = mass.T;
-    damping = mass.damping;
     pos = mass.pos;
     vel = mass.vel;
     acc = mass.acc;
@@ -48,7 +46,6 @@ Mass::Mass(const Vec & position, double mass, bool fixed, double dt) {
     this -> dt = dt;
 
     T = 0;
-    damping = 1.0;
     
     valid = true;
     arrayptr = nullptr;
@@ -63,7 +60,6 @@ CUDA_MASS::CUDA_MASS(Mass &mass) {
     m = mass.m;
     dt = mass.dt;
     T = mass.T;
-    damping = mass.damping;
     
     pos = mass.pos;
     vel = mass.vel;
@@ -81,6 +77,10 @@ CUDA_MASS::CUDA_MASS(Mass &mass) {
 }
 
 #ifdef CONSTRAINTS
+void addExternalForce(const Vec & vec) {
+    
+}
+
 void Mass::addConstraint(CONSTRAINT_TYPE type, const Vec & vec, double num) { // TODO make this more efficient
     if (type == 0) {
         this -> constraints.constraint_plane.push_back(CudaConstraintPlane(vec, num));

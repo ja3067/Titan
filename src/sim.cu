@@ -72,7 +72,6 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=f
             snprintf(buffer, sizeof(buffer), "GPUassert error in CUDA kernel: %s %s %d\n", cudaGetErrorString(code), file, line);
             std::string buffer_string = buffer;
             throw std::runtime_error(buffer_string);
-            exit(code);
         }
     }
 }
@@ -619,7 +618,7 @@ void Simulation::get(Spring * s) {
 
     CUDA_SPRING temp;
     gpuErrchk(cudaMemcpy(&temp, s -> arrayptr, sizeof(CUDA_SPRING), cudaMemcpyDeviceToHost));
-    *s = Spring(temp);
+    s -> update(temp);
 }
 
 void Simulation::set(Spring * s) {
@@ -819,16 +818,14 @@ __global__ void createMassPointers(CUDA_MASS ** ptrs, CUDA_MASS * data, int size
 CUDA_MASS ** Simulation::massToArray() {
     CUDA_MASS ** d_ptrs = new CUDA_MASS * [masses.size()]; // array of pointers
     for (int i = 0; i < masses.size(); i++) { // potentially slow
-        gpuErrchk(cudaMalloc((void **) d_ptrs + i, sizeof(CUDA_MASS *)));
+        gpuErrchk(cudaMalloc((void **) (d_ptrs + i), sizeof(CUDA_MASS))); // TODO Fix this shit
     }
 
     d_masses = thrust::device_vector<CUDA_MASS *>(d_ptrs, d_ptrs + masses.size());
 
-
     CUDA_MASS * h_data = new CUDA_MASS[masses.size()]; // copy masses into single array for copying to the GPU, set GPU pointers
 
     int count = 0;
-
     for (Mass * m : masses) {
         m -> arrayptr = d_ptrs[count];
         h_data[count] = CUDA_MASS(*m);
@@ -838,19 +835,20 @@ CUDA_MASS ** Simulation::massToArray() {
 
     delete [] d_ptrs;
 
-
-
     CUDA_MASS * d_data; // copy to the GPU
     gpuErrchk(cudaMalloc((void **)&d_data, sizeof(CUDA_MASS) * masses.size()));
     gpuErrchk(cudaMemcpy(d_data, h_data, sizeof(CUDA_MASS) * masses.size(), cudaMemcpyHostToDevice));
 
     delete [] h_data;
 
-
     massBlocksPerGrid = (masses.size() + THREADS_PER_BLOCK - 1) / THREADS_PER_BLOCK;
 
     if (massBlocksPerGrid > MAX_BLOCKS) {
         massBlocksPerGrid = MAX_BLOCKS;
+    }
+
+    if (massBlocksPerGrid < 1) {
+        massBlocksPerGrid = 1;
     }
 
     createMassPointers<<<massBlocksPerGrid, THREADS_PER_BLOCK>>>(thrust::raw_pointer_cast(d_masses.data()), d_data, masses.size());
@@ -872,11 +870,10 @@ CUDA_SPRING ** Simulation::springToArray() {
     CUDA_SPRING ** d_ptrs = new CUDA_SPRING * [springs.size()]; // array of pointers
 
     for (int i = 0; i < springs.size(); i++) { // potentially slow, allocate memory for every spring
-        gpuErrchk(cudaMalloc((void **) d_ptrs + i, sizeof(CUDA_SPRING *)));
+        gpuErrchk(cudaMalloc((void **) d_ptrs + i, sizeof(CUDA_SPRING)));
     }
 
     d_springs = thrust::device_vector<CUDA_SPRING *>(d_ptrs, d_ptrs + springs.size()); // copy those pointers to the GPU using thrust
-
 
     CUDA_SPRING * h_spring = new CUDA_SPRING[springs.size()]; // array for the springs themselves
 
@@ -997,11 +994,9 @@ void Simulation::massFromArray() {
 }
 
 void Simulation::springFromArray() {
-//    cudaFree(d_spring);
 }
 
 void Simulation::constraintsFromArray() {
-    //
 }
 
 void Simulation::fromArray() {
@@ -1047,16 +1042,16 @@ __global__ void computeSpringForces(CUDA_SPRING ** d_spring, int num_springs, do
             return;
 
         Vec temp = (spring._right -> pos) - (spring._left -> pos);
-	//	printf("%d, %f, %f\n",spring._type, spring._omega,t);
-	double scale=1.0;
-	if (spring._type == ACTIVE_CONTRACT_THEN_EXPAND){
-	  scale = (1 - 0.2*sin(spring._omega * t));
-	}else if (spring._type == ACTIVE_EXPAND_THEN_CONTRACT){
-	  scale = (1 + 0.2*sin(spring._omega * t));
-	}
-	
-        Vec force = spring._k * (spring._rest * scale - temp.norm()) * (temp / temp.norm());
 
+        double scale = 1.0;
+        if (spring._type == ACTIVE_CONTRACT_THEN_EXPAND){
+            scale = (1 - 0.2 * sin(spring._omega * t));
+        } else if (spring._type == ACTIVE_EXPAND_THEN_CONTRACT){
+            scale = (1 + 0.2 * sin(spring._omega * t));
+	    }
+	
+        Vec force = spring._k * (spring._rest * scale - temp.norm()) * (temp / temp.norm()); // normal spring force
+        force += dot(spring._left -> vel - spring._right -> vel, temp / temp.norm()) * spring._damping * (temp / temp.norm()); // damping
 
 #ifdef CONSTRAINTS
         if (spring._right -> constraints.fixed == false) {
@@ -1066,8 +1061,8 @@ __global__ void computeSpringForces(CUDA_SPRING ** d_spring, int num_springs, do
             spring._left->force.atomicVecAdd(-force);
         }
 #else
-        spring._right->force.atomicVecAdd(force);
-        spring._left->force.atomicVecAdd(-force);
+        spring._right -> force.atomicVecAdd(force);
+        spring._left -> force.atomicVecAdd(-force);
 #endif
 
     }
@@ -1093,6 +1088,7 @@ __global__ void massForcesAndUpdate(CUDA_MASS ** d_mass, Vec global, CUDA_GLOBAL
 #endif
 
         mass.force += mass.m * global;
+        // mass.force += mass.external;
 
         for (int j = 0; j < c.num_planes; j++) { // global constraints
             c.d_planes[j].applyForce(&mass);
@@ -1126,99 +1122,12 @@ __global__ void massForcesAndUpdate(CUDA_MASS ** d_mass, Vec global, CUDA_GLOBAL
 #endif
 
         mass.acc = mass.force / mass.m;
-        mass.vel = (mass.vel + mass.acc * mass.dt)*mass.damping;
+        mass.vel = mass.vel + mass.acc * mass.dt;
         mass.pos = mass.pos + mass.vel * mass.dt;
 
         mass.force = Vec(0, 0, 0);
     }
 }
-
-// __global__ void combinedKernel(CUDA_MASS ** d_mass, CUDA_SPRING ** d_spring, int num_masses, int num_springs, Vec global, CUDA_GLOBAL_CONSTRAINTS c, double t) {
-//     int i = blockDim.x * blockIdx.x + threadIdx.x;
-
-//     for (int j = 0; j < 10; j++) {    
-//         if ( i < num_springs ) {
-//             CUDA_SPRING & spring = *d_spring[i];
-
-//             if (spring._left == nullptr || spring._right == nullptr || ! spring._left -> valid || ! spring._right -> valid) // TODO might be expensive with CUDA instruction set
-//                 return;
-
-//             Vec temp = (spring._right -> pos) - (spring._left -> pos);
-//         //	printf("%d, %f, %f\n",spring._type, spring._omega,t);
-        
-//             double scale = 1.0;
-//             if (spring._type == ACTIVE_CONTRACT_THEN_EXPAND){
-//                 scale = (1 - 0.2 * sin(spring._omega * t));
-//             } else if (spring._type == ACTIVE_EXPAND_THEN_CONTRACT){
-//                 scale = (1 + 0.2 * sin(spring._omega * t));
-//             }
-        
-//             Vec force = spring._k * (spring._rest * scale - temp.norm()) * (temp / temp.norm());
-
-
-//     #ifdef CONSTRAINTS
-//             if (spring._right -> constraints.fixed == false) {
-//                 spring._right->force.atomicVecAdd(force); // need atomics here
-//             }
-//             if (spring._left -> constraints.fixed == false) {
-//                 spring._left->force.atomicVecAdd(-force);
-//             }
-//     #else
-//             spring._right->force.atomicVecAdd(force);
-//             spring._left->force.atomicVecAdd(-force);
-//     #endif
-
-//         }
-        
-//         if (i < num_masses) {
-//             CUDA_MASS &mass = *d_mass[i];
-
-//     #ifdef CONSTRAINTS
-//             if (mass.constraints.fixed == 1)
-//                 return;
-//     #endif
-
-//             mass.force += global;
-
-//             for (int j = 0; j < c.num_planes; j++) { // global constraints
-//                 c.d_planes[j].applyForce(&mass);
-//             }
-
-//             for (int j = 0; j < c.num_balls; j++) {
-//                 c.d_balls[j].applyForce(&mass);
-//             }
-
-//     #ifdef CONSTRAINTS
-//             for (int j = 0; j < mass.constraints.num_contact_planes; j++) { // local constraints
-//                 mass.constraints.contact_plane[j].applyForce(&mass);
-//             }
-
-//             for (int j = 0; j < mass.constraints.num_balls; j++) {
-//                 mass.constraints.ball[j].applyForce(&mass);
-//             }
-
-//             for (int j = 0; j < mass.constraints.num_constraint_planes; j++) {
-//                 mass.constraints.constraint_plane[j].applyForce(&mass);
-//             }
-
-//             for (int j = 0; j < mass.constraints.num_directions; j++) {
-//                 mass.constraints.direction[j].applyForce(&mass);
-//             }
-
-//             if (mass.vel.norm() != 0.0) { // NOTE TODO this is really janky. On certain platforms, the following code causes excessive memory usage on the GPU.
-//                 double norm = mass.vel.norm();
-//                 mass.force += - mass.constraints.drag_coefficient * pow(norm, 2) * mass.vel / norm; // drag
-//             }
-//     #endif
-
-//             mass.acc = mass.force / mass.m;
-//             mass.vel = (mass.vel + mass.acc * mass.dt)*mass.damping;
-//             mass.pos = mass.pos + mass.vel * mass.dt;
-
-//             mass.force = Vec(0, 0, 0);
-//         }
-//     }
-// }
 
 #ifdef GRAPHICS
 void Simulation::clearScreen() {
@@ -1486,6 +1395,10 @@ void Simulation::_run() { // repeatedly start next
 }
 
 #ifdef GRAPHICS
+glm::mat4 & Simulation::getProjectionMatrix() {
+    return this -> MVP;
+}
+
 void Simulation::setViewport(const Vec & camera_position, const Vec & target_location, const Vec & up_vector) {
     if (RUNNING) {
         throw std::runtime_error("The simulation is running. Cannot modify viewport during simulation run.");
@@ -1499,6 +1412,7 @@ void Simulation::setViewport(const Vec & camera_position, const Vec & target_loc
         this -> MVP = getProjection(camera, looks_at, up); // compute perspective projection matrix
     }
 }
+
 
 void Simulation::moveViewport(const Vec & displacement) {
     if (RUNNING) {
@@ -1674,7 +1588,6 @@ void Simulation::wait(double t) {
         throw std::runtime_error("The simulation has ended. Control functions cannot be called.");
     }
 
-
     double current_time = time();
     while (RUNNING && time() <= current_time + t) {
         std::this_thread::sleep_for(std::chrono::microseconds(10)); // TODO replace this with wait queue. 
@@ -1685,7 +1598,6 @@ void Simulation::waitUntil(double t) {
     if (ENDED && !FREED) {
         throw std::runtime_error("The simulation has ended. Control functions cannot be called.");
     }
-
 
     while (RUNNING && time() <= t) {
         std::this_thread::sleep_for(std::chrono::microseconds(10));
@@ -2014,31 +1926,31 @@ Beam * Simulation::createBeam(const Vec & center, const Vec & dims, int nx, int 
 }
 #endif
 
-Robot * Simulation::createRobot(const Vec & center, const cppn& encoding, double side_length,  double omega, double k_soft, double k_stiff){
+// Robot * Simulation::createRobot(const Vec & center, const cppn& encoding, double side_length,  double omega, double k_soft, double k_stiff){
   
-    if (ENDED) {
-        throw std::runtime_error("The simulation has ended. New objects cannot be created.");
-    }
+//     if (ENDED) {
+//         throw std::runtime_error("The simulation has ended. New objects cannot be created.");
+//     }
 
-    Robot * l = new Robot(center, encoding, side_length, omega, k_soft, k_stiff);
+//     Robot * l = new Robot(center, encoding, side_length, omega, k_soft, k_stiff);
 
     
 	   
-    d_masses.reserve(masses.size() + l -> masses.size());
-    d_springs.reserve(springs.size() + l -> springs.size());
+//     d_masses.reserve(masses.size() + l -> masses.size());
+//     d_springs.reserve(springs.size() + l -> springs.size());
 
-    for (Mass * m : l -> masses) {
-        createMass(m);
-    }
+//     for (Mass * m : l -> masses) {
+//         createMass(m);
+//     }
 
-    for (Spring * s : l -> springs) {
-        createSpring(s);
-    }
+//     for (Spring * s : l -> springs) {
+//         createSpring(s);
+//     }
 
-    containers.push_back(l);
+//     containers.push_back(l);
 
-    return l;
-}
+//     return l;
+// }
 
 
 void Simulation::createPlane(const Vec & abc, double d) { // creates half-space ax + by + cz < d
@@ -2151,4 +2063,3 @@ void Simulation::setGlobalAcceleration(const Vec & global) {
 
     this -> global = global;
 }
-
