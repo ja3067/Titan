@@ -89,23 +89,23 @@ target_include_directories(Titan PUBLIC
 
 set_target_properties(Titan PROPERTIES PUBLIC_HEADER "${TITAN_HEADER_FILES}")
 
-#install(TARGETS Titan
-#        EXPORT TitanTargets
-#        PUBLIC_HEADER DESTINATION include/Titan
-#        LIBRARY DESTINATION bin
-#        ARCHIVE DESTINATION lib
-#        RUNTIME DESTINATION bin
-#        )
-#
-#if (TITAN_SHARED_BUILD)
-#    install(EXPORT TitanTargets
-#            FILE TitanConfig.cmake
-#            DESTINATION share/titan)
-#else()
-#    install(EXPORT TitanTargets
-#            FILE TitanTargets.cmake
-#            DESTINATION share/titan)
-#
-#    configure_file(cmake/TitanConfig.cmake.in2
-#            ${CMAKE_INSTALL_PREFIX}/share/titan/TitanConfig.cmake @ONLY)
-#endif()
+install(TARGETS Titan
+        EXPORT TitanTargets
+        PUBLIC_HEADER DESTINATION include/Titan
+        LIBRARY DESTINATION bin
+        ARCHIVE DESTINATION lib
+        RUNTIME DESTINATION bin
+        )
+
+if (TITAN_SHARED_BUILD)
+    install(EXPORT TitanTargets
+            FILE TitanConfig.cmake
+            DESTINATION share/titan)
+else()
+    install(EXPORT TitanTargets
+            FILE TitanTargets.cmake
+            DESTINATION share/titan)
+
+    configure_file(cmake/TitanConfig.cmake.in2
+            ${CMAKE_INSTALL_PREFIX}/share/titan/TitanConfig.cmake @ONLY)
+endif() 
