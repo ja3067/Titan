@@ -1088,7 +1088,7 @@ __global__ void massForcesAndUpdate(CUDA_MASS ** d_mass, Vec global, CUDA_GLOBAL
 #endif
 
         mass.force += mass.m * global;
-        // mass.force += mass.external;
+        mass.force += mass.force_extern;// add external force [N]
 
         for (int j = 0; j < c.num_planes; j++) { // global constraints
             c.d_planes[j].applyForce(&mass);

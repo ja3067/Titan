@@ -23,6 +23,7 @@ struct CUDA_MASS {
     Vec vel; // velocity in m/s
     Vec acc; // acceleration in m/s^2
     Vec force; // force in kg m / s^2
+    Vec force_extern; // external force in kg m / s^2
 
 #ifdef GRAPHICS
     Vec color;
@@ -46,6 +47,8 @@ public:
     Vec vel; // velocity in m/s
     Vec acc; // acceleration in m/s^2
     Vec force; // force in kg m / s^2
+    Vec force_extern; // external force in kg m / s^2
+
 
     Mass(const Vec & position, double mass = 0.1, bool fixed = false, double dt = 0.0001);
 #ifdef CONSTRAINTS

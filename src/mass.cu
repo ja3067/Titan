@@ -11,6 +11,7 @@ Mass::Mass() {
     valid = true;
     arrayptr = nullptr;
     ref_count = 0;
+    force_extern = Vec(0, 0, 0);//external force [N]
 
 #ifdef GRAPHICS
     color = Vec(1.0, 0.2, 0.2);
@@ -25,6 +26,7 @@ void Mass::operator=(CUDA_MASS & mass) {
     vel = mass.vel;
     acc = mass.acc;
     force = mass.force;
+    force_extern = mass.force_extern;//external force [N]
     valid = mass.valid;
 
     ref_count = this -> ref_count;
@@ -65,6 +67,7 @@ CUDA_MASS::CUDA_MASS(Mass &mass) {
     vel = mass.vel;
     acc = mass.acc;
     force = mass.force;
+    force_extern = mass.force_extern;//external force [N]
     valid = true;
 
 #ifdef CONSTRAINTS
