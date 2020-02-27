@@ -1240,7 +1240,7 @@ void Simulation::createGLFWWindow() {
     glfwSwapInterval(1);
 
     // Open a window and create its OpenGL context
-    window = glfwCreateWindow(1024, 768, "CUDA Physics Simulation", NULL, NULL);
+    window = glfwCreateWindow(1920, 1080, "CUDA Physics Simulation", NULL, NULL);
 
     if (window == NULL) {
         fprintf(stderr,

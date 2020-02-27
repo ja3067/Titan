@@ -148,6 +148,18 @@ public:
         return sqrt(pow(data[0], 2) + pow(data[1], 2) + pow(data[2], 2));
     } // gives vector norm
 
+    CUDA_CALLABLE_MEMBER Vec normalize() {
+        double n = this->norm();
+        //if (n<1e-8)
+        //{// Todo: change this
+        //    n = 1e-8;// add for numerical stability
+        //}
+        data[0] = data[0] / n;
+        data[1] = data[1] / n;
+        data[2] = data[2] / n;
+        return *this;
+    } // return the normalized vector
+
     CUDA_CALLABLE_MEMBER double sum() const {
         return data[0] + data[1] + data[2];
     } // sums all components of the vector

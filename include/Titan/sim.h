@@ -177,7 +177,7 @@ private:
     void fromArray();
 
     std::thread gpu_thread;
-    Vec global; // global force
+    Vec global; // global acceleration
 
 #ifdef GRAPHICS
 
