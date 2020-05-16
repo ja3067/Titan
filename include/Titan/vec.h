@@ -152,10 +152,7 @@ public:
 
     CUDA_CALLABLE_MEMBER Vec normalize() {
         double n = this->norm();
-        //if (n<1e-8)
-        //{// Todo: change this
-        //    n = 1e-8;// add for numerical stability
-        //}
+        if (n < 1e-8) throw std::overflow_error("Overflow encountered in vector normalization");
         data[0] = data[0] / n;
         data[1] = data[1] / n;
         data[2] = data[2] / n;
