@@ -3,7 +3,7 @@
 
 ## Installation
 
-Detailed instructions can be found in the [user wiki](https://github.com/ja3067/Titan/wiki/Set-Up) for building and installing the Titan physics library.
+Detailed instructions can be found in the [user wiki](https://github.com/jacobaustin123/Titan/wiki/Set-Up) for building and installing the Titan physics library.
 
 **Try a simple Titan physics simulation**
 
@@ -11,9 +11,9 @@ Detailed instructions can be found in the [user wiki](https://github.com/ja3067/
 #include <Titan/sim.h>
 
 int main() {
-  Simulation sim;
-  sim.createLattice(Vec(0, 0, 10), Vec(5, 5, 5), 5, 5, 5); // create lattice with center at (0, 0, 10) and given dimensions
-  sim.createPlane(Vec(0, 0, 1), 0); // create constraint plane
+  titan::Simulation sim;
+  sim.createLattice(titan::Vec(0, 0, 10), titan::Vec(5, 5, 5), 5, 5, 5); // create lattice with center at (0, 0, 10) and given dimensions
+  sim.createPlane(titan::Vec(0, 0, 1), 0); // create constraint plane
   sim.start();
 }
 ```
@@ -22,7 +22,9 @@ This simple program produces a large lattice bouncing on the given plane:
 
 <img src="https://i.imgur.com/zdB0ZPg.gif" width="400" height="400">
 
-For more examples and troubleshooting, see the [github wiki](https://github.com/ja3067/Titan/wiki/Set-Up). We also have a user [Google Group](https://groups.google.com/forum/#!forum/titan-library) where you can ask questions about installation and usage, and make feature requests.
+For more examples and troubleshooting, see the [github wiki](https://github.com/jacobaustin123/Titan/wiki/Set-Up). We also have a user [Google Group](https://groups.google.com/forum/#!forum/titan-library) where you can ask questions about installation and usage, and make feature requests.
+
+Also see [this overview video](https://www.youtube.com/watch?v=IvZNL8jd77s) for an overview of the library and its capabilities.
 
 ## About
 
